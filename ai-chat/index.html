@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>MindEase AI 心理聊天</title>
+    <title>MindEase 哲学心理聊天</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
@@ -13,7 +13,7 @@
           <div class="brand-mark" aria-hidden="true">M</div>
           <div>
             <p class="eyebrow">MindEase</p>
-            <h1>AI 心理学聊天</h1>
+            <h1>哲学心理聊天</h1>
           </div>
         </div>
 
@@ -28,19 +28,19 @@
         </section>
 
         <section class="panel-section">
-          <h2>支持方式</h2>
+          <h2>对话风格</h2>
           <div class="mode-list" id="modeList" role="group" aria-label="选择支持方式">
-            <button class="mode-button is-active" type="button" data-mode="倾听">
-              <span>倾听</span>
-              <small>整理情绪与事实</small>
+            <button class="mode-button is-active" type="button" data-mode="苏格拉底">
+              <span>苏格拉底</span>
+              <small>用问题逼近真相</small>
             </button>
-            <button class="mode-button" type="button" data-mode="认知重构">
-              <span>认知重构</span>
-              <small>识别自动想法</small>
+            <button class="mode-button" type="button" data-mode="斯多葛">
+              <span>斯多葛</span>
+              <small>区分可控与不可控</small>
             </button>
-            <button class="mode-button" type="button" data-mode="行动计划">
-              <span>行动计划</span>
-              <small>拆成可执行一步</small>
+            <button class="mode-button" type="button" data-mode="存在主义">
+              <span>存在主义</span>
+              <small>从选择中重建意义</small>
             </button>
           </div>
         </section>
@@ -48,7 +48,7 @@
         <section class="panel-section">
           <h2>安全边界</h2>
           <p class="note">
-            这里提供自助式情绪支持，不能替代心理咨询、诊断或医疗建议。若你有伤害自己或他人的风险，请立即联系当地紧急服务或可信任的人。
+            这里提供哲学式自助反思，不能替代心理咨询、诊断或医疗建议。若你有伤害自己或他人的风险，请立即联系当地紧急服务或可信任的人。
           </p>
         </section>
       </aside>
@@ -57,29 +57,29 @@
         <header class="chat-header">
           <div>
             <p class="eyebrow">对话室</p>
-            <h2>把当下的感受说出来</h2>
+            <h2>把困惑交给一位哲学导师</h2>
           </div>
           <button class="ghost-button" id="clearChat" type="button">清空</button>
         </header>
 
         <div class="quick-prompts" aria-label="快捷提问">
-          <button type="button" data-prompt="我最近总是担心事情会变糟，停不下来。">焦虑循环</button>
-          <button type="button" data-prompt="我感觉自己什么都做不好，很沮丧。">自我否定</button>
-          <button type="button" data-prompt="我明天有重要事情，现在压力很大。">压力管理</button>
+          <button type="button" data-prompt="我最近总是担心事情会变糟，停不下来。">面对焦虑</button>
+          <button type="button" data-prompt="我感觉自己什么都做不好，很沮丧。">审视自我</button>
+          <button type="button" data-prompt="我不知道自己真正想要什么，感觉很迷茫。">寻找意义</button>
         </div>
 
         <div class="messages" id="messages" aria-live="polite">
           <article class="message assistant">
             <div class="avatar">AI</div>
             <div class="bubble">
-              <p>我会先帮你把感受说清楚，再一起找一个很小但可执行的下一步。你现在最想聊哪件事？</p>
+              <p>我会像一位安静而严厉的哲学导师：不急着安慰你，也不替你下结论，而是陪你把问题问到更深处。你现在最想审视哪件事？</p>
             </div>
           </article>
         </div>
 
         <form class="composer" id="chatForm">
           <label class="sr-only" for="messageInput">输入消息</label>
-          <textarea id="messageInput" rows="2" placeholder="写下你的感受、想法或正在困扰你的事情..." required></textarea>
+          <textarea id="messageInput" rows="2" placeholder="写下你的困惑、痛苦、选择或反复出现的念头..." required></textarea>
           <button type="submit">发送</button>
         </form>
       </section>
