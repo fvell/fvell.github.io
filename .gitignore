@@ -1,0 +1,5 @@
+.DS_Store
+.vercel/
+tmp-check.js
+generate_sports_proposal_poster.py
+output/
