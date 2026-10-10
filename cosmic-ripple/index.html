@@ -1,0 +1,1220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Cosmic Ripple Interaction</title>
+  <script>
+    (function () {
+      const queue = [];
+      function pushError(message) {
+        const entry = {
+          id: Date.now() + Math.random(),
+          time: new Date().toLocaleTimeString(),
+          message: String(message || "Unknown error")
+        };
+        queue.push(entry);
+        window.dispatchEvent(new CustomEvent("app-error", { detail: entry }));
+      }
+      window.addEventListener("error", function (event) {
+        pushError(event.message + " @ " + event.filename + ":" + event.lineno);
+      });
+      window.addEventListener("unhandledrejection", function (event) {
+        const reason = event.reason && (event.reason.stack || event.reason.message || event.reason);
+        pushError("Promise: " + reason);
+      });
+      window.__pushAppError = pushError;
+    })();
+  </script>
+  <style>
+    :root {
+      --bg: #050814;
+      --panel: rgba(11, 18, 38, 0.56);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #eef5ff;
+      --muted: #9db2d8;
+      --cyan: #62e8ff;
+      --violet: #a07bff;
+      --pink: #ff7dde;
+      --gold: #ffd979;
+      --danger-a: rgba(255, 90, 90, 0.95);
+      --danger-b: rgba(255, 145, 76, 0.95);
+      --shadow: 0 18px 60px rgba(0, 0, 0, 0.42);
+      --blur: blur(20px);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 16% 18%, rgba(74, 97, 255, 0.18), transparent 26%),
+        radial-gradient(circle at 80% 16%, rgba(255, 102, 220, 0.15), transparent 24%),
+        radial-gradient(circle at 50% 80%, rgba(0, 235, 204, 0.10), transparent 28%),
+        var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", "PingFang SC", "Helvetica Neue", sans-serif;
+      user-select: none;
+    }
+
+    canvas,
+    video {
+      display: block;
+    }
+
+    #app {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    #space-canvas,
+    #ripple-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    #ripple-canvas {
+      z-index: 2;
+    }
+
+    #space-canvas {
+      z-index: 1;
+    }
+
+    .glass {
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: var(--panel);
+      backdrop-filter: var(--blur);
+      box-shadow: var(--shadow);
+    }
+
+    #preloader {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background:
+        radial-gradient(circle at top, rgba(104, 80, 255, 0.22), transparent 38%),
+        rgba(3, 7, 18, 0.94);
+      transition: opacity 0.45s ease;
+    }
+
+    body.ready #preloader {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .preloader-card,
+    .intro-card {
+      width: min(88vw, 620px);
+      padding: 30px;
+      border-radius: 28px;
+    }
+
+    .eyebrow {
+      margin: 0 0 10px;
+      color: var(--cyan);
+      font-size: 13px;
+      letter-spacing: 0.24em;
+      text-transform: uppercase;
+    }
+
+    .headline {
+      margin: 0;
+      font-size: clamp(34px, 5vw, 62px);
+      line-height: 0.94;
+      font-weight: 900;
+      text-transform: uppercase;
+      background: linear-gradient(90deg, #ffffff 0%, #86ebff 33%, #cda0ff 70%, #ffe59f 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 0 24px rgba(98, 232, 255, 0.2);
+    }
+
+    .subcopy {
+      margin: 18px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      line-height: 1.7;
+    }
+
+    .progress-shell {
+      margin-top: 26px;
+      height: 14px;
+      border-radius: 999px;
+      padding: 2px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      width: 0%;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #55ecff, #7f8aff, #ff87ef, #ffd46d);
+      box-shadow: 0 0 24px rgba(85, 236, 255, 0.46);
+      transition: width 0.2s linear;
+    }
+
+    .progress-meta {
+      margin-top: 12px;
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    #intro-overlay {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.45s ease;
+      background:
+        radial-gradient(circle at 50% 38%, rgba(74, 96, 255, 0.22), transparent 28%),
+        rgba(4, 10, 24, 0.88);
+    }
+
+    #intro-overlay.show {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .intro-actions {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      margin-top: 28px;
+    }
+
+    .glass-btn,
+    .ghost-btn,
+    .icon-btn {
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      color: var(--text);
+      cursor: pointer;
+      transition: transform 0.24s ease, box-shadow 0.24s ease, border-color 0.24s ease;
+      backdrop-filter: var(--blur);
+    }
+
+    .glass-btn:hover,
+    .ghost-btn:hover,
+    .icon-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 12px 34px rgba(0, 0, 0, 0.28);
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+
+    .glass-btn {
+      padding: 14px 22px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 800;
+      background: linear-gradient(90deg, rgba(90, 232, 255, 0.22), rgba(165, 102, 255, 0.24));
+    }
+
+    .ghost-btn {
+      padding: 14px 22px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    header.topbar {
+      position: fixed;
+      top: 18px;
+      left: 18px;
+      right: 18px;
+      z-index: 10;
+      display: flex;
+      align-items: stretch;
+      justify-content: space-between;
+      gap: 18px;
+      pointer-events: none;
+    }
+
+    .stats-panel {
+      pointer-events: auto;
+    }
+
+    .stats-panel {
+      width: min(380px, 42vw);
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      padding: 14px;
+      border-radius: 26px;
+    }
+
+    .metric,
+    .action-card {
+      min-height: 94px;
+      padding: 14px;
+      border-radius: 20px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+
+    .metric-label {
+      font-size: 12px;
+      color: var(--muted);
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+    }
+
+    .metric-value {
+      margin-top: 10px;
+      font-size: 28px;
+      font-weight: 900;
+    }
+
+    .metric-copy {
+      margin-top: 8px;
+      font-size: 12px;
+      line-height: 1.5;
+      color: var(--muted);
+    }
+
+    .toggle-shell {
+      position: relative;
+      margin-top: 12px;
+      width: 62px;
+      height: 34px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      cursor: pointer;
+    }
+
+    .toggle-dot {
+      position: absolute;
+      top: 4px;
+      left: 4px;
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: #fff;
+      transition: transform 0.22s ease;
+    }
+
+    .toggle-shell.active {
+      background: linear-gradient(90deg, rgba(86, 233, 255, 0.36), rgba(255, 126, 231, 0.32));
+    }
+
+    .toggle-shell.active .toggle-dot {
+      transform: translateX(28px);
+    }
+
+    .icon-btn {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.06);
+      font-size: 22px;
+    }
+
+    #gesture-hub {
+      position: fixed;
+      left: 50%;
+      bottom: 24px;
+      transform: translateX(-50%);
+      z-index: 12;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 12px 16px;
+      border-radius: 999px;
+    }
+
+    #wake-gesture {
+      min-width: 186px;
+      padding: 15px 20px;
+      border-radius: 999px;
+      font-weight: 800;
+      background: linear-gradient(90deg, rgba(96, 223, 255, 0.24), rgba(255, 113, 245, 0.28));
+    }
+
+    .hub-status {
+      max-width: 310px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    #cursor-glow {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      pointer-events: none;
+      z-index: 20;
+      opacity: 0;
+      transform: translate(-50%, -50%);
+      background:
+        radial-gradient(circle, rgba(255, 255, 255, 0.94) 0%, rgba(94, 233, 255, 0.9) 34%, rgba(92, 111, 255, 0.16) 70%, transparent 72%);
+      box-shadow: 0 0 18px rgba(98, 232, 255, 0.46), 0 0 34px rgba(160, 116, 255, 0.26);
+      transition: opacity 0.22s ease;
+    }
+
+    #cursor-glow.active {
+      opacity: 1;
+    }
+
+    #cursor-glow.pinch {
+      filter: hue-rotate(85deg) saturate(1.35);
+    }
+
+    #toast-stack {
+      position: fixed;
+      left: 24px;
+      bottom: 112px;
+      z-index: 14;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      max-width: min(420px, calc(100vw - 48px));
+      pointer-events: none;
+    }
+
+    .toast {
+      padding: 14px 16px;
+      border-radius: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(8, 14, 28, 0.76);
+      backdrop-filter: var(--blur);
+      box-shadow: var(--shadow);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .toast strong {
+      color: var(--gold);
+    }
+
+    #error-overlay {
+      position: fixed;
+      left: 18px;
+      right: 18px;
+      bottom: 18px;
+      z-index: 95;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .error-item {
+      padding: 12px 14px;
+      border-radius: 16px;
+      color: #fff;
+      font-size: 13px;
+      line-height: 1.45;
+      background: linear-gradient(90deg, var(--danger-a), var(--danger-b));
+      box-shadow: 0 12px 32px rgba(255, 100, 86, 0.24);
+      border: 1px solid rgba(255, 255, 255, 0.16);
+      backdrop-filter: blur(14px);
+      word-break: break-word;
+    }
+
+    #media-capture {
+      position: fixed;
+      left: -9999px;
+      top: -9999px;
+      width: 1px;
+      height: 1px;
+      opacity: 0.001;
+      pointer-events: none;
+    }
+
+    @media (max-width: 980px) {
+      header.topbar {
+        justify-content: flex-end;
+      }
+
+      .stats-panel {
+        width: min(420px, 100%);
+      }
+    }
+
+    @media (max-width: 720px) {
+      header.topbar {
+        top: 12px;
+        left: 12px;
+        right: 12px;
+      }
+
+      .stats-panel {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      #gesture-hub {
+        left: 12px;
+        right: 12px;
+        bottom: 12px;
+        transform: none;
+        flex-direction: column;
+        align-items: stretch;
+        border-radius: 24px;
+      }
+
+      #wake-gesture {
+        width: 100%;
+      }
+
+      .hub-status {
+        max-width: none;
+      }
+
+      #toast-stack {
+        left: 12px;
+        right: 12px;
+        max-width: none;
+        bottom: 152px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <canvas id="space-canvas"></canvas>
+    <canvas id="ripple-canvas"></canvas>
+
+    <div id="preloader">
+      <div class="preloader-card glass">
+        <p class="eyebrow">System Boot</p>
+        <h1 class="headline">Cosmic Ripple Field</h1>
+        <p class="subcopy">Initializing stellar particles, interactive waterwave renderer, gesture tracking, and glow mapping.</p>
+        <div class="progress-shell">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
+        <div class="progress-meta">
+          <span id="progress-text">Booting modules...</span>
+          <span id="progress-percent">0%</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="intro-overlay">
+      <div class="intro-card glass">
+        <p class="eyebrow">Entry Sequence</p>
+        <h2 class="headline">Move Through The Waterfield</h2>
+        <p class="subcopy">Move your hand or cursor through the cosmic field to generate luminous ripples. Pinching intensifies the disturbance and changes the energy color.</p>
+        <div class="intro-actions">
+          <button class="glass-btn" id="enter-experience">Enter Experience</button>
+          <button class="ghost-btn" id="skip-intro">Skip</button>
+        </div>
+      </div>
+    </div>
+
+    <header class="topbar">
+      <section class="stats-panel glass">
+        <div class="action-card">
+          <div class="metric-label">Pinch Boost</div>
+          <div class="metric-copy">Increase ripple size and change energy color while pinching.</div>
+          <div class="toggle-shell" id="boost-toggle" role="switch" aria-checked="true" tabindex="0">
+            <div class="toggle-dot"></div>
+          </div>
+        </div>
+
+        <div class="metric">
+          <div class="metric-label">Ripple Count</div>
+          <div class="metric-value" id="ripple-count">0</div>
+          <div class="metric-copy">Total ripple bursts generated this session.</div>
+        </div>
+
+        <div class="metric">
+          <div class="metric-label">Live Mode</div>
+          <div class="metric-copy" id="mode-copy">Pointer control active. Gesture tracking offline.</div>
+        </div>
+
+        <div class="action-card">
+          <div class="metric-label">Fullscreen</div>
+          <div class="metric-copy">Expand the ripple field edge to edge.</div>
+          <button class="icon-btn" id="fullscreen-btn" aria-label="Toggle fullscreen">⛶</button>
+        </div>
+      </section>
+    </header>
+
+    <div id="gesture-hub" class="glass">
+      <button class="glass-btn" id="wake-gesture">Wake Gesture Control</button>
+      <div class="hub-status" id="gesture-status">Gesture tracking is inactive. Start camera access to map hand movement into live water ripples.</div>
+    </div>
+
+    <div id="cursor-glow"></div>
+    <div id="toast-stack"></div>
+    <div id="error-overlay"></div>
+    <video id="media-capture" playsinline muted></video>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+  <script>
+    const PHOTO_BASE64 = {};
+
+    (() => {
+      const state = {
+        introDismissed: false,
+        gestureReady: false,
+        gestureStarting: false,
+        gestureLoopId: 0,
+        rippleCount: 0,
+        pinchBoost: true,
+        pinchHold: false,
+        pointerVisible: false,
+        lastPointerX: window.innerWidth * 0.5,
+        lastPointerY: window.innerHeight * 0.5,
+        lastPointerMoveAt: 0,
+        currentPinch: false,
+        vortexActive: false,
+        lastRippleAt: 0,
+        lastDustAt: 0
+      };
+
+      const dom = {
+        spaceCanvas: document.getElementById("space-canvas"),
+        rippleCanvas: document.getElementById("ripple-canvas"),
+        progressBar: document.getElementById("progress-bar"),
+        progressText: document.getElementById("progress-text"),
+        progressPercent: document.getElementById("progress-percent"),
+        introOverlay: document.getElementById("intro-overlay"),
+        enterBtn: document.getElementById("enter-experience"),
+        skipBtn: document.getElementById("skip-intro"),
+        boostToggle: document.getElementById("boost-toggle"),
+        rippleCount: document.getElementById("ripple-count"),
+        modeCopy: document.getElementById("mode-copy"),
+        fullscreenBtn: document.getElementById("fullscreen-btn"),
+        wakeGesture: document.getElementById("wake-gesture"),
+        gestureStatus: document.getElementById("gesture-status"),
+        cursor: document.getElementById("cursor-glow"),
+        toastStack: document.getElementById("toast-stack"),
+        errorOverlay: document.getElementById("error-overlay"),
+        video: document.getElementById("media-capture")
+      };
+
+      const preloadSteps = [
+        { pct: 16, label: "Loading stellar background..." },
+        { pct: 38, label: "Preparing ripple field..." },
+        { pct: 62, label: "Binding gesture tracker..." },
+        { pct: 84, label: "Calibrating glow responses..." },
+        { pct: 100, label: "Ready." }
+      ];
+
+      const space = {
+        ctx: dom.spaceCanvas.getContext("2d"),
+        stars: []
+      };
+
+      const ripple = {
+        ctx: dom.rippleCanvas.getContext("2d"),
+        waves: [],
+        trails: [],
+        dust: [],
+        vortex: []
+      };
+
+      const PERF = {
+        rippleInterval: 42,
+        dustInterval: 56,
+        maxWaves: 24,
+        maxTrails: 18,
+        maxDust: 90,
+        maxVortex: 22
+      };
+
+      function renderError(item) {
+        const row = document.createElement("div");
+        row.className = "error-item";
+        row.textContent = "[" + item.time + "] " + item.message;
+        dom.errorOverlay.prepend(row);
+        while (dom.errorOverlay.children.length > 4) {
+          dom.errorOverlay.removeChild(dom.errorOverlay.lastChild);
+        }
+      }
+
+      window.addEventListener("app-error", (event) => renderError(event.detail));
+
+      function pushToast(message) {
+        const node = document.createElement("div");
+        node.className = "toast";
+        node.innerHTML = message;
+        dom.toastStack.appendChild(node);
+        gsap.fromTo(node, { y: 24, opacity: 0 }, { y: 0, opacity: 1, duration: 0.32, ease: "power3.out" });
+        gsap.to(node, {
+          y: -14,
+          opacity: 0,
+          duration: 0.3,
+          delay: 2.8,
+          ease: "power2.in",
+          onComplete: () => node.remove()
+        });
+      }
+
+      function setProgress(pct, label) {
+        dom.progressBar.style.width = pct + "%";
+        dom.progressPercent.textContent = pct + "%";
+        dom.progressText.textContent = label;
+      }
+
+      async function preload() {
+        for (const step of preloadSteps) {
+          await new Promise((resolve) => setTimeout(resolve, 320));
+          setProgress(step.pct, step.label);
+        }
+        document.body.classList.add("ready");
+        setTimeout(() => {
+          dom.introOverlay.classList.add("show");
+        }, 280);
+      }
+
+      function dismissIntro() {
+        if (state.introDismissed) return;
+        state.introDismissed = true;
+        dom.introOverlay.classList.remove("show");
+        pushToast("<strong>Field unlocked.</strong> Move across the screen to generate luminous ripples.");
+      }
+
+      function resizeCanvases() {
+        const dpr = Math.min(window.devicePixelRatio || 1, 2);
+        [dom.spaceCanvas, dom.rippleCanvas].forEach((canvas) => {
+          canvas.width = Math.floor(window.innerWidth * dpr);
+          canvas.height = Math.floor(window.innerHeight * dpr);
+          canvas.style.width = window.innerWidth + "px";
+          canvas.style.height = window.innerHeight + "px";
+        });
+        space.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ripple.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        buildStars();
+      }
+
+      function buildStars() {
+        space.stars = [];
+        for (let i = 0; i < 180; i++) {
+          space.stars.push({
+            x: Math.random() * window.innerWidth,
+            y: Math.random() * window.innerHeight,
+            r: Math.random() * 2.1 + 0.3,
+            speed: Math.random() * 0.22 + 0.03,
+            hue: i % 3 === 0 ? "98,229,255" : i % 3 === 1 ? "204,152,255" : "255,224,138",
+            alpha: Math.random() * 0.75 + 0.12
+          });
+        }
+      }
+
+      function drawSpace(time) {
+        const ctx = space.ctx;
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+        const bg = ctx.createLinearGradient(0, 0, 0, window.innerHeight);
+        bg.addColorStop(0, "#050916");
+        bg.addColorStop(1, "#09132a");
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+        const haze = ctx.createRadialGradient(window.innerWidth * 0.5, window.innerHeight * 0.48, 10, window.innerWidth * 0.5, window.innerHeight * 0.48, Math.min(window.innerWidth, window.innerHeight) * 0.38);
+        haze.addColorStop(0, "rgba(92,229,255,0.15)");
+        haze.addColorStop(0.55, "rgba(141,118,255,0.08)");
+        haze.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = haze;
+        ctx.fillRect(0, 0, window.innerWidth, window.innerHeight);
+
+        space.stars.forEach((star, index) => {
+          const drift = Math.sin(time * 0.00018 + index) * 0.45;
+          star.y += star.speed;
+          if (star.y > window.innerHeight + 8) {
+            star.y = -8;
+            star.x = Math.random() * window.innerWidth;
+          }
+          ctx.fillStyle = "rgba(" + star.hue + "," + star.alpha + ")";
+          ctx.beginPath();
+          ctx.arc(star.x + drift, star.y, star.r, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+
+      function addRipple(x, y, pinch) {
+        const now = performance.now();
+        if (now - state.lastRippleAt < PERF.rippleInterval) return;
+        state.lastRippleAt = now;
+        const color = pinch && state.pinchBoost
+          ? { ring: "255,132,233", core: "255,226,126", glow: "112,235,255" }
+          : { ring: "102,232,255", core: "255,255,255", glow: "156,118,255" };
+        ripple.waves.push({
+          x,
+          y,
+          radius: 12,
+          life: 1,
+          pinch,
+          color,
+          maxRadius: pinch && state.pinchBoost ? 260 : 180,
+          lineWidth: pinch && state.pinchBoost ? 3.2 : 2.2,
+          phase: Math.random() * Math.PI * 2
+        });
+        ripple.trails.push({
+          x,
+          y,
+          life: 1,
+          radius: pinch && state.pinchBoost ? 34 : 24,
+          color
+        });
+        if (ripple.waves.length > PERF.maxWaves) ripple.waves.splice(0, ripple.waves.length - PERF.maxWaves);
+        if (ripple.trails.length > PERF.maxTrails) ripple.trails.splice(0, ripple.trails.length - PERF.maxTrails);
+        state.rippleCount += 1;
+        dom.rippleCount.textContent = String(state.rippleCount);
+      }
+
+      function addDustBurst(x, y, pinch) {
+        const now = performance.now();
+        if (now - state.lastDustAt < PERF.dustInterval) return;
+        state.lastDustAt = now;
+        const count = pinch && state.pinchBoost ? 5 : 3;
+        for (let i = 0; i < count; i++) {
+          const angle = Math.random() * Math.PI * 2;
+          const speed = Math.random() * (pinch ? 2.1 : 1.5) + 0.35;
+          ripple.dust.push({
+            x,
+            y,
+            vx: Math.cos(angle) * speed,
+            vy: Math.sin(angle) * speed,
+            life: 1,
+            radius: Math.random() * 2.2 + 0.8,
+            pinch,
+            hue: pinch && state.pinchBoost
+              ? (i % 2 === 0 ? "255,136,236" : "255,224,122")
+              : (i % 2 === 0 ? "100,232,255" : "170,130,255")
+          });
+        }
+        if (ripple.dust.length > PERF.maxDust) ripple.dust.splice(0, ripple.dust.length - PERF.maxDust);
+      }
+
+      function ensureVortex(x, y, pinch) {
+        if (state.vortexActive) return;
+        state.vortexActive = true;
+        const count = pinch && state.pinchBoost ? 14 : 10;
+        for (let i = 0; i < count; i++) {
+          ripple.vortex.push({
+            cx: x,
+            cy: y,
+            angle: (Math.PI * 2 * i) / count,
+            radius: 18 + Math.random() * 34,
+            orbitSpeed: (Math.random() * 0.025 + 0.012) * (i % 2 === 0 ? 1 : -1),
+            life: 1,
+            pinch,
+            size: Math.random() * 3 + 1,
+            hue: pinch && state.pinchBoost
+              ? (i % 2 === 0 ? "255,140,227" : "255,225,127")
+              : (i % 2 === 0 ? "102,232,255" : "162,119,255")
+          });
+        }
+        ripple.vortex.push({
+          core: true,
+          cx: x,
+          cy: y,
+          angle: 0,
+          radius: pinch && state.pinchBoost ? 30 : 24,
+          orbitSpeed: 0,
+          life: 1,
+          pinch,
+          size: pinch && state.pinchBoost ? 20 : 16,
+          hue: pinch && state.pinchBoost ? "255,226,126" : "255,255,255"
+        });
+        if (ripple.vortex.length > PERF.maxVortex) ripple.vortex.splice(0, ripple.vortex.length - PERF.maxVortex);
+      }
+
+      function updateVortexAnchor(x, y, pinch) {
+        ripple.vortex.forEach((item, index) => {
+          item.cx = x;
+          item.cy = y;
+          item.pinch = pinch;
+          if (item.core) {
+            item.size = pinch && state.pinchBoost ? 20 : 16;
+            item.radius = pinch && state.pinchBoost ? 30 : 24;
+            item.hue = pinch && state.pinchBoost ? "255,226,126" : "255,255,255";
+            return;
+          }
+          item.hue = pinch && state.pinchBoost
+            ? (index % 2 === 0 ? "255,140,227" : "255,225,127")
+            : (index % 2 === 0 ? "102,232,255" : "162,119,255");
+        });
+      }
+
+      function decayVortex() {
+        state.vortexActive = false;
+        ripple.vortex.forEach((item) => {
+          item.life = Math.min(item.life, 0.6);
+        });
+      }
+
+      function updateCursor(x, y, pinch) {
+        state.pointerVisible = true;
+        state.lastPointerX = x;
+        state.lastPointerY = y;
+        state.lastPointerMoveAt = performance.now();
+        state.currentPinch = pinch;
+        dom.cursor.classList.add("active");
+        dom.cursor.classList.toggle("pinch", pinch);
+        dom.cursor.style.transform = "translate(" + x + "px, " + y + "px) translate(-50%, -50%) scale(" + (pinch ? 1.75 : 1) + ")";
+      }
+
+      function drawRipples() {
+        const ctx = ripple.ctx;
+        ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+        const idle = performance.now() - state.lastPointerMoveAt;
+        if (state.pointerVisible && idle > 150 && idle < 2000) {
+          ensureVortex(state.lastPointerX, state.lastPointerY, state.currentPinch);
+          updateVortexAnchor(state.lastPointerX, state.lastPointerY, state.currentPinch);
+        } else if (idle >= 2000 && ripple.vortex.length) {
+          decayVortex();
+        }
+
+        for (let i = ripple.trails.length - 1; i >= 0; i--) {
+          const item = ripple.trails[i];
+          item.life -= 0.035;
+          item.radius += 0.9;
+          if (item.life <= 0) {
+            ripple.trails.splice(i, 1);
+            continue;
+          }
+          const grad = ctx.createRadialGradient(item.x, item.y, 0, item.x, item.y, item.radius);
+          grad.addColorStop(0, "rgba(" + item.color.core + "," + (0.24 * item.life) + ")");
+          grad.addColorStop(0.55, "rgba(" + item.color.glow + "," + (0.14 * item.life) + ")");
+          grad.addColorStop(1, "rgba(" + item.color.glow + ",0)");
+          ctx.fillStyle = grad;
+          ctx.beginPath();
+          ctx.arc(item.x, item.y, item.radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (let i = ripple.dust.length - 1; i >= 0; i--) {
+          const dust = ripple.dust[i];
+          dust.life -= 0.026;
+          dust.x += dust.vx;
+          dust.y += dust.vy;
+          dust.vx *= 0.985;
+          dust.vy *= 0.985;
+          if (dust.life <= 0) {
+            ripple.dust.splice(i, 1);
+            continue;
+          }
+          ctx.fillStyle = "rgba(" + dust.hue + "," + (0.42 * dust.life) + ")";
+          ctx.beginPath();
+          ctx.arc(dust.x, dust.y, dust.radius * 1.8, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (let i = ripple.waves.length - 1; i >= 0; i--) {
+          const wave = ripple.waves[i];
+          wave.life -= 0.017;
+          wave.radius += wave.pinch && state.pinchBoost ? 4.6 : 3.1;
+          wave.phase += 0.14;
+          if (wave.radius > wave.maxRadius || wave.life <= 0) {
+            ripple.waves.splice(i, 1);
+            continue;
+          }
+          const bands = [
+            { offset: 0, alpha: 0.62, width: wave.lineWidth, color: wave.color.ring },
+            { offset: Math.sin(wave.phase) * 5 + 12, alpha: 0.22, width: wave.lineWidth * 0.7, color: wave.color.glow }
+          ];
+
+          for (const band of bands) {
+            ctx.strokeStyle = "rgba(" + band.color + "," + (band.alpha * wave.life) + ")";
+            ctx.lineWidth = band.width;
+            ctx.beginPath();
+            ctx.arc(wave.x, wave.y, wave.radius + band.offset, 0, Math.PI * 2);
+            ctx.stroke();
+          }
+
+          ctx.strokeStyle = "rgba(" + wave.color.glow + "," + (0.09 * wave.life) + ")";
+          ctx.lineWidth = wave.lineWidth * 2.6;
+          ctx.beginPath();
+          ctx.arc(wave.x, wave.y, wave.radius + 8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+
+        for (let i = ripple.vortex.length - 1; i >= 0; i--) {
+          const node = ripple.vortex[i];
+          node.life -= state.vortexActive ? 0.003 : 0.02;
+          if (node.life <= 0) {
+            ripple.vortex.splice(i, 1);
+            continue;
+          }
+          if (node.core) {
+            const pulse = 1 + Math.sin(performance.now() * 0.007) * 0.18;
+            const coreGrad = ctx.createRadialGradient(node.cx, node.cy, 0, node.cx, node.cy, node.size * 3 * pulse);
+            coreGrad.addColorStop(0, "rgba(" + node.hue + "," + (0.8 * node.life) + ")");
+            coreGrad.addColorStop(0.5, "rgba(255,255,255," + (0.28 * node.life) + ")");
+            coreGrad.addColorStop(1, "rgba(" + node.hue + ",0)");
+            ctx.fillStyle = coreGrad;
+            ctx.beginPath();
+            ctx.arc(node.cx, node.cy, node.size * 2.2 * pulse, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.strokeStyle = "rgba(255,255,255," + (0.22 * node.life) + ")";
+            ctx.lineWidth = 1.5;
+            ctx.beginPath();
+            ctx.arc(node.cx, node.cy, node.radius * pulse, 0, Math.PI * 2);
+            ctx.stroke();
+            continue;
+          }
+
+          node.angle += node.orbitSpeed;
+          node.radius += Math.sin(node.angle * 2.4) * 0.16;
+          const px = node.cx + Math.cos(node.angle) * node.radius;
+          const py = node.cy + Math.sin(node.angle) * node.radius * 0.62;
+          ctx.fillStyle = "rgba(" + node.hue + "," + (0.55 * node.life) + ")";
+          ctx.beginPath();
+          ctx.arc(px, py, node.size * 1.7, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      function animate(now) {
+        drawSpace(now);
+        drawRipples();
+        requestAnimationFrame(animate);
+      }
+
+      function setGestureStatus(message) {
+        dom.gestureStatus.textContent = message;
+        dom.modeCopy.textContent = message;
+      }
+
+      function toggleBoost() {
+        state.pinchBoost = !state.pinchBoost;
+        dom.boostToggle.classList.toggle("active", state.pinchBoost);
+        dom.boostToggle.setAttribute("aria-checked", String(state.pinchBoost));
+        pushToast(state.pinchBoost
+          ? "<strong>Pinch boost enabled.</strong> Pinching now creates larger and brighter water ripples."
+          : "<strong>Pinch boost disabled.</strong> All ripples now use standard energy spread.");
+      }
+
+      async function toggleFullscreen() {
+        try {
+          if (!document.fullscreenElement) {
+            await document.documentElement.requestFullscreen();
+          } else {
+            await document.exitFullscreen();
+          }
+        } catch (error) {
+          window.__pushAppError("Fullscreen failed: " + error.message);
+        }
+      }
+
+      function handleHandLandmarks(landmarks) {
+        if (!landmarks || !landmarks.length) {
+          dom.cursor.classList.remove("pinch");
+          return;
+        }
+
+        const marks = landmarks[0];
+        const indexTip = marks[8];
+        const thumbTip = marks[4];
+        const distance = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+        const pinch = distance < 0.055;
+        const x = (1 - indexTip.x) * window.innerWidth;
+        const y = indexTip.y * window.innerHeight;
+        updateCursor(x, y, pinch);
+        addRipple(x, y, pinch);
+        addDustBurst(x, y, pinch);
+
+        if (pinch && !state.pinchHold) {
+          state.pinchHold = true;
+          pushToast("<strong>Pinch surge.</strong> The ripple field intensified.");
+        }
+        if (!pinch) {
+          state.pinchHold = false;
+        }
+      }
+
+      function waitForVideoReady(video) {
+        if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && video.videoWidth > 0 && video.videoHeight > 0) {
+          return Promise.resolve();
+        }
+
+        return new Promise((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            cleanup();
+            reject(new Error("Camera stream did not produce a usable video frame."));
+          }, 8000);
+
+          function cleanup() {
+            window.clearTimeout(timeout);
+            video.removeEventListener("loadedmetadata", onReady);
+            video.removeEventListener("canplay", onReady);
+            video.removeEventListener("playing", onReady);
+          }
+
+          function onReady() {
+            if (video.videoWidth > 0 && video.videoHeight > 0) {
+              cleanup();
+              resolve();
+            }
+          }
+
+          video.addEventListener("loadedmetadata", onReady);
+          video.addEventListener("canplay", onReady);
+          video.addEventListener("playing", onReady);
+        });
+      }
+
+      function stopGestureStream() {
+        if (dom.video.srcObject) {
+          dom.video.srcObject.getTracks().forEach((track) => track.stop());
+          dom.video.srcObject = null;
+        }
+        if (state.gestureLoopId) {
+          cancelAnimationFrame(state.gestureLoopId);
+          state.gestureLoopId = 0;
+        }
+      }
+
+      async function initGestureSystem() {
+        if (state.gestureReady || state.gestureStarting) return;
+        state.gestureStarting = true;
+        dom.wakeGesture.disabled = true;
+        setGestureStatus("Starting camera and loading CPU gesture tracker...");
+
+        try {
+          const {
+            FilesetResolver,
+            HandLandmarker
+          } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/+esm");
+
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              width: { ideal: 640 },
+              height: { ideal: 480 },
+              facingMode: "user"
+            },
+            audio: false
+          });
+          dom.video.srcObject = stream;
+          await dom.video.play();
+          await waitForVideoReady(dom.video);
+
+          const vision = await FilesetResolver.forVisionTasks(
+            "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.35/wasm"
+          );
+
+          const handLandmarker = await HandLandmarker.createFromOptions(vision, {
+            baseOptions: {
+              modelAssetPath: "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task",
+              delegate: "CPU"
+            },
+            runningMode: "VIDEO",
+            numHands: 1,
+            minHandDetectionConfidence: 0.6,
+            minHandPresenceConfidence: 0.55,
+            minTrackingConfidence: 0.55
+          });
+
+          let lastVideoTime = -1;
+          function detectLoop() {
+            if (!state.gestureReady) return;
+            state.gestureLoopId = requestAnimationFrame(detectLoop);
+            if (
+              dom.video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+              dom.video.videoWidth <= 0 ||
+              dom.video.videoHeight <= 0 ||
+              dom.video.currentTime === lastVideoTime
+            ) {
+              return;
+            }
+
+            lastVideoTime = dom.video.currentTime;
+            try {
+              const results = handLandmarker.detectForVideo(dom.video, performance.now());
+              handleHandLandmarks(results.landmarks);
+            } catch (error) {
+              setGestureStatus("Gesture tracking paused after a video frame error. Pointer mode remains available.");
+              window.__pushAppError("Gesture frame failed: " + error.message);
+              state.gestureReady = false;
+              stopGestureStream();
+            }
+          }
+
+          state.gestureReady = true;
+          state.gestureStarting = false;
+          setGestureStatus("Gesture tracking active. Move your hand to sculpt ripples. Pinch for surge mode.");
+          pushToast("<strong>Gesture control online.</strong> The ripple field is now mapped to your hand.");
+          detectLoop();
+        } catch (error) {
+          state.gestureReady = false;
+          state.gestureStarting = false;
+          dom.wakeGesture.disabled = false;
+          stopGestureStream();
+          setGestureStatus("Gesture tracking failed. Pointer mode remains available.");
+          window.__pushAppError("Gesture init failed: " + error.message);
+        }
+      }
+
+      function bindPointer() {
+        window.addEventListener("pointermove", (event) => {
+          updateCursor(event.clientX, event.clientY, false);
+          addRipple(event.clientX, event.clientY, false);
+          addDustBurst(event.clientX, event.clientY, false);
+        });
+
+        window.addEventListener("pointerdown", (event) => {
+          updateCursor(event.clientX, event.clientY, true);
+          addRipple(event.clientX, event.clientY, true);
+          addDustBurst(event.clientX, event.clientY, true);
+        });
+
+        window.addEventListener("pointerleave", () => {
+          if (!state.gestureReady) {
+            dom.cursor.classList.remove("active", "pinch");
+          }
+          decayVortex();
+        });
+      }
+
+      function bindUI() {
+        dom.enterBtn.addEventListener("click", dismissIntro);
+        dom.skipBtn.addEventListener("click", dismissIntro);
+        dom.boostToggle.addEventListener("click", toggleBoost);
+        dom.boostToggle.addEventListener("keydown", (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            toggleBoost();
+          }
+        });
+        dom.fullscreenBtn.addEventListener("click", toggleFullscreen);
+        dom.wakeGesture.addEventListener("click", initGestureSystem);
+        window.addEventListener("resize", resizeCanvases);
+      }
+
+      resizeCanvases();
+      bindUI();
+      bindPointer();
+      animate(0);
+      preload();
+      setGestureStatus("Pointer control active. Start gesture control if you want hand-driven ripples.");
+    })();
+  </script>
+</body>
+</html>
