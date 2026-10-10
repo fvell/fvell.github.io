@@ -1,12 +1,29 @@
-# Cosmic Ripple Interaction
+# 个人信息 AI 化
 
-A single-page interactive ripple field with pointer control and optional camera-based hand gesture tracking.
+一个隐私优先的个人规划单页应用。用户填写目标、学习与职业、健康、财务、关系和生活状态后，页面会在本地生成全方位发展报告与 90 天行动计划。
 
-## Run locally
+## 功能
+
+- 多维度结构化信息采集
+- PDF、DOCX、TXT、Markdown、JSON 拖拽导入与本地字段提取
+- 浏览器本地自动保存
+- 动态优先级与风险判断
+- 90 天行动路线
+- 学习、职业、健康、财务、关系和生活建议
+- 环形指标、时间轴与每周时间分配图
+- 响应式布局与打印报告
+
+文件内容在浏览器本地解析，不会由本站上传到服务器。若要使用云端大模型做深度语义提取，需要另行配置安全的服务端接口，不能把模型密钥放在 GitHub Pages 前端。
+
+## 本地运行
 
 ```bash
 python3 -m http.server 8123
 ```
 
-Then open `http://localhost:8123/`.
+打开 `http://localhost:8123/`。
 
+## 其他页面
+
+- `/cosmic-ripple/`：原互动视觉页面
+- `/ai-chat/`：哲学心理聊天实验
